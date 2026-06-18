@@ -6,8 +6,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .models import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL
-
 
 class Passage(BaseModel):
     id: Optional[Union[int, str]] = None
@@ -22,7 +20,9 @@ PassageField = Union[str, Passage]
 class RerankRequestBody(BaseModel):
     query: str = Field(..., description="The search query.")
     passages: List[PassageField] = Field(..., description="Candidate passages to rerank.")
-    model: str = Field(DEFAULT_FAST_MODEL, description="Model name from /models.")
+    model: Optional[str] = Field(
+        None, description="Model name from /models. Defaults to the server's configured default."
+    )
     top_k: Optional[int] = Field(None, ge=1, description="Return only the top K results.")
     max_length: Optional[int] = Field(None, ge=16, le=512, description="Max token length.")
 
@@ -30,8 +30,8 @@ class RerankRequestBody(BaseModel):
 class CascadeRequestBody(BaseModel):
     query: str = Field(..., description="The search query.")
     passages: List[PassageField] = Field(..., description="Candidate passages to rerank.")
-    fast_model: str = Field(DEFAULT_FAST_MODEL, description="Cheap first-stage model.")
-    strong_model: str = Field(DEFAULT_STRONG_MODEL, description="Stronger second-stage model.")
+    fast_model: Optional[str] = Field(None, description="Cheap first-stage model.")
+    strong_model: Optional[str] = Field(None, description="Stronger second-stage model.")
     prune_to: int = Field(50, ge=1, description="Survivors kept after stage 1.")
     top_k: Optional[int] = Field(None, ge=1, description="Return only the top K results.")
     max_length: Optional[int] = Field(None, ge=16, le=512, description="Max token length.")

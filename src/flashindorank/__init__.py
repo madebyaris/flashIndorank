@@ -3,6 +3,7 @@
 from .config import settings
 from .models import (
     DEFAULT_FAST_MODEL,
+    DEFAULT_MULTILINGUAL_MODEL,
     DEFAULT_STRONG_MODEL,
     MODELS,
     ModelInfo,
@@ -19,6 +20,7 @@ __all__ = [
     "ModelInfo",
     "DEFAULT_FAST_MODEL",
     "DEFAULT_STRONG_MODEL",
+    "DEFAULT_MULTILINGUAL_MODEL",
     "is_supported",
     "list_models",
     "get_ranker",

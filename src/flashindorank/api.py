@@ -70,7 +70,7 @@ def models() -> List[ModelDescription]:
 
 @app.post("/rerank", response_model=RerankResponse)
 def rerank_endpoint(body: RerankRequestBody) -> RerankResponse:
-    if not is_supported(body.model):
+    if body.model is not None and not is_supported(body.model):
         raise HTTPException(status_code=400, detail=f"Unsupported model: {body.model}")
 
     start = time.perf_counter()
@@ -88,7 +88,7 @@ def rerank_endpoint(body: RerankRequestBody) -> RerankResponse:
 @app.post("/rerank/cascade", response_model=RerankResponse)
 def rerank_cascade_endpoint(body: CascadeRequestBody) -> RerankResponse:
     for model_name in (body.fast_model, body.strong_model):
-        if not is_supported(model_name):
+        if model_name is not None and not is_supported(model_name):
             raise HTTPException(status_code=400, detail=f"Unsupported model: {model_name}")
 
     start = time.perf_counter()

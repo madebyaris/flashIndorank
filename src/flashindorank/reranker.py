@@ -23,7 +23,7 @@ from flashrank import Ranker, RerankRequest
 from flashrank.Config import model_file_map
 
 from .config import settings
-from .models import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL, is_supported
+from .models import is_supported
 
 PassageInput = Union[str, Dict[str, Any]]
 
@@ -117,16 +117,20 @@ def _finalize(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def rerank(
     query: str,
     passages: Sequence[PassageInput],
-    model_name: str = DEFAULT_FAST_MODEL,
+    model_name: Optional[str] = None,
     top_k: Optional[int] = None,
     max_length: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Rerank ``passages`` against ``query`` with a single model."""
+    """Rerank ``passages`` against ``query`` with a single model.
+
+    When ``model_name`` is ``None`` the configured default
+    (``settings.default_model``) is used.
+    """
     normalized = _normalize_passages(passages)
     if not normalized:
         return []
 
-    ranker = get_ranker(model_name, max_length=max_length)
+    ranker = get_ranker(model_name or settings.default_model, max_length=max_length)
     results = ranker.rerank(RerankRequest(query=query, passages=normalized))
     results = _finalize(results)
     if top_k is not None:
@@ -137,8 +141,8 @@ def rerank(
 def rerank_cascade(
     query: str,
     passages: Sequence[PassageInput],
-    fast_model: str = DEFAULT_FAST_MODEL,
-    strong_model: str = DEFAULT_STRONG_MODEL,
+    fast_model: Optional[str] = None,
+    strong_model: Optional[str] = None,
     prune_to: int = 50,
     top_k: Optional[int] = None,
     max_length: Optional[int] = None,
@@ -148,8 +152,12 @@ def rerank_cascade(
     Stage 1 runs ``fast_model`` over every passage and keeps the top
     ``prune_to``. Stage 2 runs ``strong_model`` only over those survivors. When
     the candidate set is already small (``<= prune_to``) stage 1 is skipped
-    entirely since there is nothing to prune.
+    entirely since there is nothing to prune. ``None`` resolves to the
+    configured defaults (``settings.default_model`` / ``default_strong_model``).
     """
+    fast_model = fast_model or settings.default_model
+    strong_model = strong_model or settings.default_strong_model
+
     normalized = _normalize_passages(passages)
     if not normalized:
         return []

@@ -40,6 +40,17 @@ services are required.
   first request per model pays the load cost, set `FLASHINDORANK_PRELOAD_MODELS`
   to warm them at startup.
 
+### Indonesian language note (project focus)
+The bundled default models are English MS-MARCO cross-encoders and are **weak on
+Indonesian semantics** (they rely on lexical overlap). The only bundled model
+trained multilingually is `ms-marco-MultiBERT-L-12` (~99 MB) — use it for Bahasa
+Indonesia via `FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12` or a per-request
+`model`. `benchmarks/eval_indonesian.py` is the reproducible quality harness for
+this claim (top-1 acc / MRR on paraphrased Indonesian queries). Genuinely strong
+Indonesian reranking needs a larger external multilingual cross-encoder, which
+conflicts with the lightweight goal and would require an ONNX path outside
+FlashRank's bundled set.
+
 ### Available runtimes on the VM
 Python 3.12, `pip`, Node.js 22 (`npm`, `pnpm`), Go 1.22 (`uv` not installed).
 This project only uses Python.

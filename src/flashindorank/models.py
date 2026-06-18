@@ -55,6 +55,13 @@ MODELS: Dict[str, ModelInfo] = {
 DEFAULT_FAST_MODEL = "ms-marco-TinyBERT-L-2-v2"
 DEFAULT_STRONG_MODEL = "ms-marco-MiniLM-L-12-v2"
 
+# The only bundled model actually trained multilingually (100+ languages incl.
+# Indonesian). The English MS-MARCO models above are NOT trained on Indonesian,
+# so for Bahasa Indonesia corpora this is the model to reach for. It is heavier
+# (~99 MB) and only modestly better on hard Indonesian queries -- see
+# benchmarks/eval_indonesian.py.
+DEFAULT_MULTILINGUAL_MODEL = "ms-marco-MultiBERT-L-12"
+
 
 def list_models() -> List[ModelInfo]:
     return list(MODELS.values())

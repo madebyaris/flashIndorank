@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
+from .models import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL
+
 
 def _default_cache_dir() -> str:
     return os.environ.get(
@@ -43,6 +45,18 @@ class Settings:
     cache_dir: str = field(default_factory=_default_cache_dir)
     log_level: str = field(default_factory=lambda: os.environ.get("FLASHINDORANK_LOG_LEVEL", "ERROR"))
     max_length: int = field(default_factory=lambda: _env_int("FLASHINDORANK_MAX_LENGTH", 512))
+
+    # Default models used when a request/call does not specify one. Indonesian
+    # users can set FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12 to make
+    # the multilingual model the default everywhere, no code change required.
+    default_model: str = field(
+        default_factory=lambda: os.environ.get("FLASHINDORANK_DEFAULT_MODEL", DEFAULT_FAST_MODEL)
+    )
+    default_strong_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "FLASHINDORANK_DEFAULT_STRONG_MODEL", DEFAULT_STRONG_MODEL
+        )
+    )
 
     # ONNX Runtime thread counts. 0 lets ORT decide; on tiny VPS boxes pin to a
     # small number (e.g. 1-2) to avoid context-switch thrash.

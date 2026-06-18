@@ -19,6 +19,41 @@ heavy for small boxes. flashIndorank keeps things small and fast:
 - **Thread control** – pin ONNX Runtime threads so it doesn't thrash a small VPS.
 - **No GPU required** – pure CPU ONNX inference.
 
+## Indonesian (Bahasa Indonesia) support
+
+Important: the default models (`ms-marco-TinyBERT-L-2-v2`, `ms-marco-MiniLM-L-12-v2`)
+are trained on **English** MS-MARCO. They lean heavily on lexical overlap and are
+**not strong on Indonesian semantics**. FlashRank's bundled multilingual model,
+`ms-marco-MultiBERT-L-12` (100+ languages incl. Indonesian), is the right choice
+for Bahasa Indonesia, though on a hard paraphrase eval it is only modestly better
+and is heavier (~99 MB vs 3–22 MB).
+
+Reproduce the evidence yourself:
+
+```bash
+python benchmarks/eval_indonesian.py
+```
+
+Example output (paraphrased relevant passage, low lexical overlap):
+
+| model | top-1 acc | MRR |
+| --- | --- | --- |
+| ms-marco-TinyBERT-L-2-v2 | 0.40 | 0.633 |
+| ms-marco-MiniLM-L-12-v2 | 0.40 | 0.633 |
+| ms-marco-MultiBERT-L-12 (multilingual) | 0.40 | 0.667 |
+
+To make the multilingual model the default everywhere (no code change), set:
+
+```bash
+export FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12
+```
+
+…or pass `"model": "ms-marco-MultiBERT-L-12"` per request. For genuinely strong
+Indonesian relevance you generally need a larger multilingual cross-encoder
+(e.g. BGE-reranker-v2-m3, Jina reranker v2 multilingual, GTE multilingual
+reranker); those trade away some of the "ultra-light" goal and would require
+adding an ONNX inference path outside FlashRank's bundled set.
+
 ## Models
 
 | Model | Size | Notes |
@@ -48,6 +83,8 @@ Useful environment variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `FLASHINDORANK_CACHE_DIR` | `~/.cache/flashindorank` | Where ONNX model weights are cached. |
+| `FLASHINDORANK_DEFAULT_MODEL` | `ms-marco-TinyBERT-L-2-v2` | Default model when a request omits one (set to `ms-marco-MultiBERT-L-12` for Indonesian). |
+| `FLASHINDORANK_DEFAULT_STRONG_MODEL` | `ms-marco-MiniLM-L-12-v2` | Default cascade second-stage model. |
 | `FLASHINDORANK_PRELOAD_MODELS` | _(none)_ | Comma-separated models to load at startup. |
 | `FLASHINDORANK_INTRA_OP_THREADS` | `0` (auto) | ONNX intra-op threads (pin to 1–2 on tiny VPS). |
 | `FLASHINDORANK_INTER_OP_THREADS` | `0` (auto) | ONNX inter-op threads. |
