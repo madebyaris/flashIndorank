@@ -63,6 +63,10 @@ Gotchas for the training pipeline:
 - Custom ONNX serving needs only the runtime deps (uses the `tokenizers` lib, no
   torch/transformers at inference). The exported dir must contain `model.onnx`
   + `tokenizer.json`.
+- `CustomReranker` intentionally pins ORT to a single thread, disables the CPU
+  mem arena, pads manually (not via `encode_batch`), and serializes inference
+  with a lock. This is required for deterministic, correct rankings when served
+  under uvicorn's threadpool; multi-threaded ORT was observed to reorder results.
 - Trained/exported models and datasets live under `models/` and `data/` and are
   gitignored (do not commit weights).
 
