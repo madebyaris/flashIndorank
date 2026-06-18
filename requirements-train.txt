@@ -1,0 +1,10 @@
+# Optional, heavy dependencies for fine-tuning an Indonesian cross-encoder.
+# Install separately from the runtime deps:  pip install -r requirements-train.txt
+# (CPU torch; for GPU install the appropriate CUDA build of torch instead.)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+sentence-transformers>=3.0
+transformers>=4.40
+datasets>=2.18
+accelerate>=0.30
+optimum[onnxruntime]>=1.20

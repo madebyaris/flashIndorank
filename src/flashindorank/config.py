@@ -1,0 +1,91 @@
+"""Runtime configuration, read once from environment variables.
+
+Everything here is tuned for low-resource (cheap VPS) deployments: small
+defaults, explicit thread control so ONNX Runtime does not oversubscribe a
+1-2 vCPU box, and a persistent on-disk model cache so model weights are
+downloaded only once.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List
+
+from .models import DEFAULT_FAST_MODEL, DEFAULT_STRONG_MODEL
+
+
+def _default_cache_dir() -> str:
+    return os.environ.get(
+        "FLASHINDORANK_CACHE_DIR",
+        str(Path.home() / ".cache" / "flashindorank"),
+    )
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_list(name: str) -> List[str]:
+    raw = os.environ.get(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _env_custom_models(name: str) -> "dict[str, str]":
+    """Parse ``FLASHINDORANK_CUSTOM_MODELS`` like ``name=/path,name2=/path2``."""
+    out: dict[str, str] = {}
+    for entry in _env_list(name):
+        if "=" in entry:
+            key, path = entry.split("=", 1)
+            key, path = key.strip(), path.strip()
+            if key and path:
+                out[key] = path
+    return out
+
+
+@dataclass
+class Settings:
+    """Process-wide settings, resolved from the environment at import time."""
+
+    cache_dir: str = field(default_factory=_default_cache_dir)
+    log_level: str = field(default_factory=lambda: os.environ.get("FLASHINDORANK_LOG_LEVEL", "ERROR"))
+    max_length: int = field(default_factory=lambda: _env_int("FLASHINDORANK_MAX_LENGTH", 512))
+
+    # Default models used when a request/call does not specify one. Indonesian
+    # users can set FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12 to make
+    # the multilingual model the default everywhere, no code change required.
+    default_model: str = field(
+        default_factory=lambda: os.environ.get("FLASHINDORANK_DEFAULT_MODEL", DEFAULT_FAST_MODEL)
+    )
+    default_strong_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "FLASHINDORANK_DEFAULT_STRONG_MODEL", DEFAULT_STRONG_MODEL
+        )
+    )
+
+    # ONNX Runtime thread counts. 0 lets ORT decide; on tiny VPS boxes pin to a
+    # small number (e.g. 1-2) to avoid context-switch thrash.
+    intra_op_threads: int = field(default_factory=lambda: _env_int("FLASHINDORANK_INTRA_OP_THREADS", 0))
+    inter_op_threads: int = field(default_factory=lambda: _env_int("FLASHINDORANK_INTER_OP_THREADS", 0))
+
+    # Models to load eagerly on startup so the first request is not slow.
+    preload_models: List[str] = field(default_factory=lambda: _env_list("FLASHINDORANK_PRELOAD_MODELS"))
+
+    # Custom local ONNX cross-encoders: {name: model_dir}. Lets you serve a
+    # fine-tuned (e.g. Indonesian) reranker alongside the bundled FlashRank ones.
+    custom_models: dict = field(
+        default_factory=lambda: _env_custom_models("FLASHINDORANK_CUSTOM_MODELS")
+    )
+
+    host: str = field(default_factory=lambda: os.environ.get("FLASHINDORANK_HOST", "0.0.0.0"))
+    port: int = field(default_factory=lambda: _env_int("FLASHINDORANK_PORT", 8000))
+
+
+settings = Settings()

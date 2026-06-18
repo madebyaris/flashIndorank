@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+
+# Model cache (downloaded ONNX weights)
+.model_cache/
+
+# Training artifacts (datasets + trained/exported models)
+data/
+models/
+hf_cache/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
