@@ -38,6 +38,18 @@ def _env_list(name: str) -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _env_custom_models(name: str) -> "dict[str, str]":
+    """Parse ``FLASHINDORANK_CUSTOM_MODELS`` like ``name=/path,name2=/path2``."""
+    out: dict[str, str] = {}
+    for entry in _env_list(name):
+        if "=" in entry:
+            key, path = entry.split("=", 1)
+            key, path = key.strip(), path.strip()
+            if key and path:
+                out[key] = path
+    return out
+
+
 @dataclass
 class Settings:
     """Process-wide settings, resolved from the environment at import time."""
@@ -65,6 +77,12 @@ class Settings:
 
     # Models to load eagerly on startup so the first request is not slow.
     preload_models: List[str] = field(default_factory=lambda: _env_list("FLASHINDORANK_PRELOAD_MODELS"))
+
+    # Custom local ONNX cross-encoders: {name: model_dir}. Lets you serve a
+    # fine-tuned (e.g. Indonesian) reranker alongside the bundled FlashRank ones.
+    custom_models: dict = field(
+        default_factory=lambda: _env_custom_models("FLASHINDORANK_CUSTOM_MODELS")
+    )
 
     host: str = field(default_factory=lambda: os.environ.get("FLASHINDORANK_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: _env_int("FLASHINDORANK_PORT", 8000))

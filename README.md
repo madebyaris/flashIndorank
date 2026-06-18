@@ -48,11 +48,28 @@ To make the multilingual model the default everywhere (no code change), set:
 export FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12
 ```
 
-…or pass `"model": "ms-marco-MultiBERT-L-12"` per request. For genuinely strong
-Indonesian relevance you generally need a larger multilingual cross-encoder
-(e.g. BGE-reranker-v2-m3, Jina reranker v2 multilingual, GTE multilingual
-reranker); those trade away some of the "ultra-light" goal and would require
-adding an ONNX inference path outside FlashRank's bundled set.
+…or pass `"model": "ms-marco-MultiBERT-L-12"` per request.
+
+### Fine-tune your own Indonesian reranker (recommended)
+
+For the strongest Indonesian results, fine-tune a lightweight multilingual
+cross-encoder on Indonesian data and serve the quantized ONNX result. See
+[`TRAINING.md`](TRAINING.md) for the full pipeline. On a reference CPU run the
+fine-tuned model beat every off-the-shelf option on a hard Indonesian eval:
+
+| model | top-1 | MRR | nDCG@10 |
+| --- | --- | --- | --- |
+| `ms-marco-MiniLM-L-12-v2` (English default) | 0.615 | 0.743 | 0.805 |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.860 | 0.921 | 0.941 |
+| **fine-tuned Indonesian model** | **0.895** | **0.940** | **0.956** |
+
+Serve a fine-tuned/exported ONNX model alongside the bundled ones:
+
+```bash
+export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
+python -m flashindorank
+# POST /rerank with {"model": "id-reranker", ...}
+```
 
 ## Models
 
@@ -86,6 +103,7 @@ Useful environment variables:
 | `FLASHINDORANK_DEFAULT_MODEL` | `ms-marco-TinyBERT-L-2-v2` | Default model when a request omits one (set to `ms-marco-MultiBERT-L-12` for Indonesian). |
 | `FLASHINDORANK_DEFAULT_STRONG_MODEL` | `ms-marco-MiniLM-L-12-v2` | Default cascade second-stage model. |
 | `FLASHINDORANK_PRELOAD_MODELS` | _(none)_ | Comma-separated models to load at startup. |
+| `FLASHINDORANK_CUSTOM_MODELS` | _(none)_ | Local ONNX rerankers as `name=/path,name2=/path2` (e.g. a fine-tuned Indonesian model). |
 | `FLASHINDORANK_INTRA_OP_THREADS` | `0` (auto) | ONNX intra-op threads (pin to 1–2 on tiny VPS). |
 | `FLASHINDORANK_INTER_OP_THREADS` | `0` (auto) | ONNX inter-op threads. |
 | `FLASHINDORANK_MAX_LENGTH` | `512` | Max token length. |

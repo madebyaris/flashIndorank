@@ -42,14 +42,29 @@ services are required.
 
 ### Indonesian language note (project focus)
 The bundled default models are English MS-MARCO cross-encoders and are **weak on
-Indonesian semantics** (they rely on lexical overlap). The only bundled model
-trained multilingually is `ms-marco-MultiBERT-L-12` (~99 MB) — use it for Bahasa
-Indonesia via `FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12` or a per-request
-`model`. `benchmarks/eval_indonesian.py` is the reproducible quality harness for
-this claim (top-1 acc / MRR on paraphrased Indonesian queries). Genuinely strong
-Indonesian reranking needs a larger external multilingual cross-encoder, which
-conflicts with the lightweight goal and would require an ONNX path outside
-FlashRank's bundled set.
+Indonesian semantics** (they rely on lexical overlap). `benchmarks/eval_indonesian.py`
+is a quick reproducible harness for that claim.
+
+The recommended path for strong Indonesian relevance is the **fine-tuning
+pipeline** in `training/` (documented in `TRAINING.md`): prepare data from TyDi
+QA → fine-tune a multilingual cross-encoder → export to quantized ONNX → serve
+via the `CustomReranker` using `FLASHINDORANK_CUSTOM_MODELS=name=/path`. On a
+reference CPU run the fine-tuned model reached top-1 0.895 / MRR 0.940 vs 0.615 /
+0.743 for the English default.
+
+Gotchas for the training pipeline:
+- Training deps are **heavy and separate**: `pip install -r requirements-train.txt`
+  (CPU torch). They are NOT part of the startup update script.
+- `datasets` 5.x dropped script-based loaders, so script datasets like
+  `unicamp-dl/mmarco` / `miracl` won't `load_dataset` directly; we use TyDi QA
+  (`tydiqa`, `secondary_task`), filtering Indonesian via the `id` field prefix.
+- `training/` scripts import sibling modules (`from common import ...`), so run
+  them from the repo root (e.g. `python training/train.py`).
+- Custom ONNX serving needs only the runtime deps (uses the `tokenizers` lib, no
+  torch/transformers at inference). The exported dir must contain `model.onnx`
+  + `tokenizer.json`.
+- Trained/exported models and datasets live under `models/` and `data/` and are
+  gitignored (do not commit weights).
 
 ### Available runtimes on the VM
 Python 3.12, `pip`, Node.js 22 (`npm`, `pnpm`), Go 1.22 (`uv` not installed).

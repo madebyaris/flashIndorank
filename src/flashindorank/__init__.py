@@ -10,7 +10,15 @@ from .models import (
     is_supported,
     list_models,
 )
-from .reranker import get_ranker, rerank, rerank_cascade, timed_rerank, warmup
+from .custom import CustomReranker
+from .reranker import (
+    get_ranker,
+    is_known_model,
+    rerank,
+    rerank_cascade,
+    timed_rerank,
+    warmup,
+)
 
 __version__ = "0.1.0"
 
@@ -22,7 +30,9 @@ __all__ = [
     "DEFAULT_STRONG_MODEL",
     "DEFAULT_MULTILINGUAL_MODEL",
     "is_supported",
+    "is_known_model",
     "list_models",
+    "CustomReranker",
     "get_ranker",
     "rerank",
     "rerank_cascade",

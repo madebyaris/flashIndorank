@@ -23,12 +23,18 @@ from flashrank import Ranker, RerankRequest
 from flashrank.Config import model_file_map
 
 from .config import settings
+from .custom import CustomReranker
 from .models import is_supported
 
 PassageInput = Union[str, Dict[str, Any]]
 
-_ranker_cache: Dict[Tuple[str, int], Ranker] = {}
+_ranker_cache: Dict[Tuple[str, int], Any] = {}
 _cache_lock = threading.Lock()
+
+
+def is_known_model(model_name: str) -> bool:
+    """True if ``model_name`` is a bundled FlashRank model or a custom one."""
+    return is_supported(model_name) or model_name in settings.custom_models
 
 
 def _apply_thread_limits(ranker: Ranker, model_name: str) -> None:
@@ -53,9 +59,9 @@ def _apply_thread_limits(ranker: Ranker, model_name: str) -> None:
     ranker.session = ort.InferenceSession(model_path, sess_options=so)
 
 
-def get_ranker(model_name: str, max_length: Optional[int] = None) -> Ranker:
-    """Return a cached, warm :class:`Ranker` for ``model_name``."""
-    if not is_supported(model_name):
+def get_ranker(model_name: str, max_length: Optional[int] = None):
+    """Return a cached, warm ranker (bundled FlashRank or custom ONNX)."""
+    if not is_known_model(model_name):
         raise ValueError(f"Unsupported model: {model_name!r}")
 
     length = max_length or settings.max_length
@@ -67,13 +73,21 @@ def get_ranker(model_name: str, max_length: Optional[int] = None) -> Ranker:
     with _cache_lock:
         ranker = _ranker_cache.get(key)
         if ranker is None:
-            ranker = Ranker(
-                model_name=model_name,
-                cache_dir=settings.cache_dir,
-                max_length=length,
-                log_level=settings.log_level,
-            )
-            _apply_thread_limits(ranker, model_name)
+            if model_name in settings.custom_models:
+                ranker = CustomReranker(
+                    settings.custom_models[model_name],
+                    max_length=length,
+                    intra_op_threads=settings.intra_op_threads,
+                    inter_op_threads=settings.inter_op_threads,
+                )
+            else:
+                ranker = Ranker(
+                    model_name=model_name,
+                    cache_dir=settings.cache_dir,
+                    max_length=length,
+                    log_level=settings.log_level,
+                )
+                _apply_thread_limits(ranker, model_name)
             _ranker_cache[key] = ranker
     return ranker
 

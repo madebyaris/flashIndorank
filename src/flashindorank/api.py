@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 
 from . import reranker
 from .config import settings
-from .models import is_supported, list_models
+from .models import list_models
 from .schemas import (
     CascadeRequestBody,
     HealthResponse,
@@ -57,7 +57,7 @@ def health() -> HealthResponse:
 
 @app.get("/models", response_model=List[ModelDescription])
 def models() -> List[ModelDescription]:
-    return [
+    descriptions = [
         ModelDescription(
             name=m.name,
             size_mb=m.size_mb,
@@ -66,11 +66,21 @@ def models() -> List[ModelDescription]:
         )
         for m in list_models()
     ]
+    for name, path in settings.custom_models.items():
+        descriptions.append(
+            ModelDescription(
+                name=name,
+                size_mb=0.0,
+                description=f"Custom local ONNX reranker ({path})",
+                multilingual=True,
+            )
+        )
+    return descriptions
 
 
 @app.post("/rerank", response_model=RerankResponse)
 def rerank_endpoint(body: RerankRequestBody) -> RerankResponse:
-    if body.model is not None and not is_supported(body.model):
+    if body.model is not None and not reranker.is_known_model(body.model):
         raise HTTPException(status_code=400, detail=f"Unsupported model: {body.model}")
 
     start = time.perf_counter()
@@ -88,7 +98,7 @@ def rerank_endpoint(body: RerankRequestBody) -> RerankResponse:
 @app.post("/rerank/cascade", response_model=RerankResponse)
 def rerank_cascade_endpoint(body: CascadeRequestBody) -> RerankResponse:
     for model_name in (body.fast_model, body.strong_model):
-        if model_name is not None and not is_supported(model_name):
+        if model_name is not None and not reranker.is_known_model(model_name):
             raise HTTPException(status_code=400, detail=f"Unsupported model: {model_name}")
 
     start = time.perf_counter()
