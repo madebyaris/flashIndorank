@@ -29,7 +29,23 @@ python training/export_onnx.py --model-dir models/ft-id-ce --out-dir models/ft-i
 export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
 python -m flashindorank
 # -> POST /rerank with {"model": "id-reranker", ...}
+
+# 7. (Optional) Publish to the Hugging Face Hub
+export HF_TOKEN=hf_xxx   # a token with Write access
+python training/upload_to_hf.py --repo-id madebyaris/rerank-indonesia
 ```
+
+## Publishing to Hugging Face
+
+`training/upload_to_hf.py` pushes both formats to one repo:
+
+- the sentence-transformers CrossEncoder (PyTorch/safetensors) at the repo root,
+  so `CrossEncoder("madebyaris/rerank-indonesia")` works, and
+- the quantized ONNX model + tokenizer under `onnx/` for lightweight serving,
+
+plus a generated model card. It needs a **write** token in `HF_TOKEN` (or
+`HUGGING_FACE_HUB_TOKEN`); create one at
+<https://huggingface.co/settings/tokens>.
 
 ## How it works
 
