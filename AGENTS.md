@@ -2,34 +2,44 @@
 
 ## Cursor Cloud specific instructions
 
-As of this writing, this repository is an **empty starter**: the only tracked
-file is `LICENSE` (plus this file). There is no application source code,
-package manifest, lockfile, Dockerfile, Makefile, or setup script yet.
+**Product:** `flashindorank` — a lightweight, high-performance cross-encoder
+reranker built on [FlashRank](https://github.com/PrithivirajDamodaran/FlashRank),
+tuned to run fast on cheap VPS hardware. Python 3.12, packaged with a `src/`
+layout (`src/flashindorank`). The HTTP service is FastAPI + uvicorn.
 
-Intended product (from the GitHub repo description, not yet implemented):
-**flashIndorank** — "a flashrank specialist for Indonesia language", i.e. an
-Indonesian-language specialization built on top of
-[FlashRank](https://github.com/PrithivirajDamodaran/FlashRank), a Python
-re-ranking library. This strongly suggests the eventual stack will be Python.
+There is a single service (the FastAPI reranker API). No database or external
+services are required.
 
-Because nothing is implemented, there is currently:
+### Layout
+- `src/flashindorank/` — package: `config.py` (env settings), `models.py`
+  (model registry), `reranker.py` (core + cascade), `api.py` (FastAPI app),
+  `__main__.py` (server entry).
+- `benchmarks/benchmark.py` — latency/throughput benchmark.
+- `tests/` — pytest suite (`test_reranker.py`, `test_api.py`).
 
-- nothing to install (no dependency manifest),
-- nothing to lint/test/build,
-- no service to run, and therefore no end-to-end / "hello world" flow to exercise.
+### Standard commands (see README for full details)
+- Lint: `ruff check src benchmarks tests`
+- Test: `pytest`
+- Run API (dev): `python -m flashindorank` (serves on `:8000`, docs at `/docs`)
+- Benchmark: `python benchmarks/benchmark.py`
 
-Once real code lands, update this section with how to install, lint, test,
-build, and run the relevant service(s).
+### Non-obvious gotchas
+- **Use a virtualenv.** The system Python is externally managed (PEP 668); the
+  update script creates/uses `/workspace/.venv`. Activate it with
+  `source .venv/bin/activate` before running any command. `python3-venv` is a
+  system package that must already be present (it is on the base VM).
+- **Model weights download on first use** from Hugging Face
+  (`huggingface.co/prithivida/flashrank`); the first rerank/test needs network.
+  Set `FLASHINDORANK_CACHE_DIR` to a persistent dir to avoid re-downloading
+  (tests/`conftest.py` point it at `/workspace/.model_cache`). Models are tiny
+  (TinyBERT 3.3 MB, MiniLM 21.6 MB).
+- **FlashRank does not expose ONNX SessionOptions**, so `reranker.py` rebuilds
+  the session to apply `FLASHINDORANK_INTRA_OP_THREADS` /
+  `FLASHINDORANK_INTER_OP_THREADS`. Pin these to 1–2 on small VPS boxes.
+- Rankers are cached as warm singletons keyed by `(model, max_length)`; the
+  first request per model pays the load cost, set `FLASHINDORANK_PRELOAD_MODELS`
+  to warm them at startup.
 
 ### Available runtimes on the VM
-
-The base VM already provides (no install needed): Python 3.12, `pip`,
-Node.js 22 (`npm`, `pnpm`), and Go 1.22. `uv` is not installed.
-
-### Update script
-
-The startup update script is intentionally a guarded no-op for the current
-empty repo: it only installs dependencies if a recognized manifest
-(`requirements.txt`, `pyproject.toml`, or `package.json`) is present. This keeps
-future startups working both now (empty repo) and after the project is
-scaffolded.
+Python 3.12, `pip`, Node.js 22 (`npm`, `pnpm`), Go 1.22 (`uv` not installed).
+This project only uses Python.

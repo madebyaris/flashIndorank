@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashindorank"
+version = "0.1.0"
+description = "Lightweight, high-performance cross-encoder reranker built on FlashRank, tuned to run fast on cheap VPS hardware."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Aris Setiawan" }]
+keywords = ["reranker", "flashrank", "search", "retrieval", "rag", "cross-encoder", "onnx"]
+dependencies = [
+    "flashrank>=0.2.10",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.5"]
+
+[project.scripts]
+flashindorank = "flashindorank.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/madebyaris/flashIndorank"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
