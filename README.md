@@ -6,6 +6,10 @@ run **fast on cheap VPS hardware** (1–2 vCPU, little RAM) by defaulting to tin
 ONNX models and offering a two-stage **cascade** that gets close to
 strong-model quality at a fraction of the cost.
 
+> **Indonesian model is live:** our fine-tuned Indonesian reranker is published at
+> **[madebyaris/rerank-indonesia](https://huggingface.co/madebyaris/rerank-indonesia)**
+> on Hugging Face. See [Indonesian reranker — live on Hugging Face](#indonesian-reranker--live-on-hugging-face).
+
 ## Why
 
 Reranking dramatically improves search/RAG quality, but most rerankers are too
@@ -50,26 +54,47 @@ export FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12
 
 …or pass `"model": "ms-marco-MultiBERT-L-12"` per request.
 
-### Fine-tune your own Indonesian reranker (recommended)
+### Indonesian reranker — live on Hugging Face
 
-For the strongest Indonesian results, fine-tune a lightweight multilingual
-cross-encoder on Indonesian data and serve the quantized ONNX result. See
-[`TRAINING.md`](TRAINING.md) for the full pipeline. On a reference CPU run the
-fine-tuned model beat every off-the-shelf option on a hard Indonesian eval:
+Our fine-tuned Indonesian reranker is published and ready to use:
+**[madebyaris/rerank-indonesia](https://huggingface.co/madebyaris/rerank-indonesia)**.
+
+Use it directly with sentence-transformers:
+
+```python
+from sentence_transformers import CrossEncoder
+
+model = CrossEncoder("madebyaris/rerank-indonesia")
+query = "Bagaimana cara menurunkan berat badan?"
+passages = [
+    "Olahraga teratur dan pola makan sehat membantu mengurangi bobot tubuh.",
+    "Harga emas global naik tajam dalam sepekan terakhir.",
+]
+scores = model.predict([[query, p] for p in passages])
+```
+
+Or grab the lightweight int8 ONNX build (under `onnx/`) and serve it via
+flashIndorank:
+
+```bash
+huggingface-cli download madebyaris/rerank-indonesia --include "onnx/*" --local-dir id-reranker
+export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/id-reranker/onnx"
+python -m flashindorank
+# POST /rerank with {"model": "id-reranker", ...}
+```
+
+On a reference CPU run it beats every off-the-shelf option on a hard Indonesian eval:
 
 | model | top-1 | MRR | nDCG@10 |
 | --- | --- | --- | --- |
 | `ms-marco-MiniLM-L-12-v2` (English default) | 0.615 | 0.743 | 0.805 |
 | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.860 | 0.921 | 0.941 |
-| **fine-tuned Indonesian model** | **0.895** | **0.940** | **0.956** |
+| **[madebyaris/rerank-indonesia](https://huggingface.co/madebyaris/rerank-indonesia)** | **0.895** | **0.940** | **0.956** |
 
-Serve a fine-tuned/exported ONNX model alongside the bundled ones:
+### Train your own
 
-```bash
-export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
-python -m flashindorank
-# POST /rerank with {"model": "id-reranker", ...}
-```
+Want to reproduce or retrain on your own data? See [`TRAINING.md`](TRAINING.md)
+for the full fine-tune → export → serve pipeline.
 
 ## Models
 
