@@ -135,17 +135,27 @@ class MiraclBM25:
 
     def search(self, query: str, k: int, exclude: set[str] | None = None) -> List[Tuple[str, str, float]]:
         """Return up to ``k`` ``(docid, text, score)`` hits excluding ``exclude`` docids."""
+        import numpy as np
+
         exclude = exclude or set()
-        scores = self._bm25.get_scores(tokenize(query))
-        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        scores = np.array(self._bm25.get_scores(tokenize(query)), dtype=np.float32)
+        if exclude:
+            for docid in exclude:
+                idx = self.docid_to_idx.get(docid)
+                if idx is not None:
+                    scores[idx] = -1.0
+        n = len(scores)
+        if n == 0:
+            return []
+        pick = min(max(k * 5, k), n)
+        top_idx = np.argpartition(-scores, pick - 1)[:pick]
+        top_idx = top_idx[np.argsort(-scores[top_idx])]
         hits: List[Tuple[str, str, float]] = []
-        for idx in ranked:
-            if scores[idx] <= 0:
+        for idx in top_idx:
+            score = float(scores[idx])
+            if score <= 0:
                 break
-            docid = self.docids[idx]
-            if docid in exclude:
-                continue
-            hits.append((docid, self.texts[idx], float(scores[idx])))
+            hits.append((self.docids[idx], self.texts[idx], score))
             if len(hits) >= k:
                 break
         return hits
