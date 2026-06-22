@@ -111,9 +111,12 @@ def load_corpus(
     """Load corpus into parallel ``docids`` and ``texts`` lists."""
     docids: List[str] = []
     texts: List[str] = []
-    for docid, text in iter_corpus(cache=cache, max_docs=max_docs):
+    for i, (docid, text) in enumerate(iter_corpus(cache=cache, max_docs=max_docs), start=1):
         docids.append(docid)
         texts.append(text)
+        if i % 200_000 == 0:
+            print(f"  loaded {i} corpus passages...", flush=True)
+    print(f"  loaded {len(docids)} corpus passages total.", flush=True)
     return docids, texts
 
 
@@ -124,8 +127,11 @@ class MiraclBM25:
         self.docids = list(docids)
         self.texts = list(texts)
         self.docid_to_idx = {d: i for i, d in enumerate(self.docids)}
+        print(f"Tokenizing {len(self.texts)} passages for BM25 ...", flush=True)
         self._tokenized = [tokenize(t) for t in self.texts]
+        print("Building BM25 index ...", flush=True)
         self._bm25 = BM25Okapi(self._tokenized)
+        print("BM25 index ready.", flush=True)
 
     def search(self, query: str, k: int, exclude: set[str] | None = None) -> List[Tuple[str, str, float]]:
         """Return up to ``k`` ``(docid, text, score)`` hits excluding ``exclude`` docids."""

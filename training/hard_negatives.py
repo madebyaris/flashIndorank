@@ -32,24 +32,33 @@ class HardNegativeMiner:
         self.bm25 = bm25
         self._dense = None
         self._dense_name = dense_model_name
+        self._passage_emb = None
         random.seed(seed)
 
     def _dense_model(self):
         if self._dense is None and self._dense_name:
             from sentence_transformers import SentenceTransformer
 
+            print(f"Loading dense retriever {self._dense_name} ...", flush=True)
             self._dense = SentenceTransformer(self._dense_name)
+            print(f"Encoding {len(self.passages)} passages for dense mining ...", flush=True)
+            self._passage_emb = self._dense.encode(
+                self.passages,
+                normalize_embeddings=True,
+                show_progress_bar=True,
+                batch_size=64,
+            )
+            print("Dense passage index ready.", flush=True)
         return self._dense
 
     def _dense_top(self, query: str, k: int, exclude_idx: int) -> List[int]:
-        model = self._dense_model()
-        if model is None:
+        if not self._dense_name:
             return []
+        self._dense_model()
         import numpy as np
 
-        q_emb = model.encode([query], normalize_embeddings=True)[0]
-        p_emb = model.encode(self.passages, normalize_embeddings=True, show_progress_bar=False)
-        scores = p_emb @ q_emb
+        q_emb = self._dense.encode([query], normalize_embeddings=True)[0]
+        scores = self._passage_emb @ q_emb
         ranked = np.argsort(-scores)
         out: List[int] = []
         for idx in ranked:
