@@ -107,7 +107,7 @@ def main() -> None:
         print(f"  {len(tydi_rows)} rows, {len(tydi_passages)} unique passages")
 
     bm25: MiraclBM25 | None = None
-    if "miracl" in sources or args.train_negatives > 3:
+    if "miracl" in sources:
         print("Loading MIRACL-id corpus + building BM25 index (one-time, ~1.4M passages)...")
         bm25 = MiraclBM25.from_cache(cache=args.miracl_cache, max_docs=args.max_corpus_docs)
         print(f"  indexed {len(bm25.docids)} passages")
