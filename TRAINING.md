@@ -30,9 +30,9 @@ export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
 python -m flashindorank
 # -> POST /rerank with {"model": "id-reranker", ...}
 
-# 7. (Optional) Publish to the Hugging Face Hub
-export HF_TOKEN=hf_xxx   # a token with Write access
-python training/upload_to_hf.py --repo-id madebyaris/rerank-indonesia
+# 7. Publish v2 to Hugging Face (preview branch; main keeps v1)
+export HF_TOKEN=hf_xxx
+python training/upload_to_hf.py --revision huggingface
 ```
 
 ## Publishing to Hugging Face
