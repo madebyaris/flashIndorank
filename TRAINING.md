@@ -10,20 +10,20 @@ serves it through flashIndorank — all CPU-friendly so it still fits a cheap VP
 # 1. Install training deps (heavy; separate from runtime deps)
 pip install -r requirements-train.txt
 
-# 2. Build Indonesian train/eval data from TyDi QA (Gold Passage)
-python training/prepare_data.py --train-queries 800 --eval-queries 200
+# 2. Build Indonesian train/eval data (TyDi QA + MIRACL-id, BM25 hard negatives)
+python training/prepare_data.py --sources tydi,miracl --train-negatives 15
 
-# 3. Fine-tune (CPU smoke run ~10 min; use a GPU + more data for real runs)
-python training/train.py --epochs 2 --batch-size 16
+# 3. Fine-tune v2 (1 epoch default; GPU recommended for full data)
+python training/train.py --epochs 1 --batch-size 16 --out-dir models/ft-id-ce-v2
 
-# 4. Compare base vs fine-tuned (and the English default) on the SAME eval
+# 4. Compare on TyDi holdout + MIRACL-id official rerank eval
 python training/evaluate.py --models \
-    ms-marco-MiniLM-L-12-v2 \
     cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 \
-    models/ft-id-ce
+    models/ft-id-ce-v2
+python training/eval_miracl.py --model models/ft-id-ce-v2
 
 # 5. Export to quantized ONNX for lightweight serving
-python training/export_onnx.py --model-dir models/ft-id-ce --out-dir models/ft-id-ce-onnx
+python training/export_onnx.py --model-dir models/ft-id-ce-v2 --out-dir models/ft-id-ce-v2-onnx
 
 # 6. Serve the fine-tuned model through the API
 export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
@@ -51,9 +51,10 @@ plus a generated model card. It needs a **write** token in `HF_TOKEN` (or
 
 | Step | Script | What it does |
 | --- | --- | --- |
-| Data | `training/prepare_data.py` | Loads Indonesian rows from **TyDi QA** (`secondary_task`/Gold Passage), takes each gold passage as a positive, and mines **hard negatives** by lexical overlap. Writes `data/train.jsonl` (pairs + labels) and `data/eval.jsonl` (ranking items). |
-| Train | `training/train.py` | Fine-tunes a `CrossEncoder` (default base `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`) with binary cross-entropy using sentence-transformers v5 `CrossEncoderTrainer`. |
-| Eval | `training/evaluate.py` | Reports top-1 accuracy, MRR, nDCG@10 for any mix of FlashRank bundled models and CrossEncoder paths/names. |
+| Data | `training/prepare_data.py` | Loads **TyDi QA** Indonesian rows and **MIRACL-id train** (topics+qrels+corpus). Mines **BM25 hard negatives** (15/query default) plus optional dense mining on the TyDi passage pool. Writes `data/train.jsonl` and `data/eval.jsonl`. |
+| Train | `training/train.py` | Fine-tunes a `CrossEncoder` (default base `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`) with binary cross-entropy. Default output: `models/ft-id-ce-v2`. |
+| Eval | `training/evaluate.py` | Reports top-1 accuracy, MRR, nDCG@10 on the TyDi holdout set. |
+| MIRACL eval | `training/eval_miracl.py` | Official-style protocol: BM25 top-100 from the MIRACL-id corpus → cross-encoder rerank → nDCG@10 / MRR@10 / Recall@100. |
 | Export | `training/export_onnx.py` | Exports to ONNX via `optimum` and applies dynamic int8 quantization, producing `model.onnx` + tokenizer. |
 | Serve | `flashindorank` `CustomReranker` | Loads the local ONNX model with the fast `tokenizers` lib (no torch/transformers at inference) and serves it like any bundled model. |
 
