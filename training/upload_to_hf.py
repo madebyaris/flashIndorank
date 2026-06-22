@@ -73,8 +73,15 @@ TyDi holdout (200 queries, 1 positive + 9 hard negatives each):
 | **this model (v2 preview)** | **0.910** | **0.951** | **0.964** |
 | v1 on `main` branch | 0.915 | 0.953 | 0.965 |
 
-MIRACL-id official rerank eval (BM25 top-100 → rerank): run
-`python training/eval_miracl.py --model madebyaris/rerank-indonesia --revision huggingface`
+MIRACL-id official rerank eval (BM25 top-100 → rerank, 960 dev queries):
+
+| model | nDCG@10 | MRR@10 | Recall@100 |
+| --- | --- | --- | --- |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.656 | 0.623 | 0.760 |
+| **this model (v2 preview)** | 0.635 | 0.602 | 0.760 |
+
+> v2 preview was trained on TyDi only (50k pairs). Full TyDi+MIRACL training on
+> RunPod is expected to improve MIRACL numbers.
 
 ## Usage
 
