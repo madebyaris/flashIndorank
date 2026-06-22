@@ -55,9 +55,10 @@ from [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross
 on Indonesian query/passage pairs from **TyDi QA** and **MIRACL-id**, with
 **BM25 + dense hard-negative mining** (15 negatives per query).
 
-> **Branch note:** This `huggingface` branch holds the **v2 preview** checkpoint.
-> The `main` branch still serves the original v1 model. Full training on all
-> 162k pairs is intended to run on RunPod GPU — see
+> **Branch note:** This `huggingface` branch holds the **v2 preview** checkpoint
+> (TyDi QA only, 50k pairs, 1 epoch on CPU). The `main` branch still serves the
+> original v1 model. Full training on TyDi + MIRACL (162k pairs) is intended to
+> run on RunPod GPU — see
 > [flashIndorank TRAINING.md](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
 
 Built as part of [flashIndorank](https://github.com/madebyaris/flashIndorank).
@@ -69,7 +70,7 @@ TyDi holdout (200 queries, 1 positive + 9 hard negatives each):
 | model | top-1 | MRR | nDCG@10 |
 | --- | --- | --- | --- |
 | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.905 | 0.943 | 0.957 |
-| **this model (v2 preview)** | **0.925** | **0.953** | **0.964** |
+| **this model (v2 preview)** | **0.910** | **0.951** | **0.964** |
 | v1 on `main` branch | 0.915 | 0.953 | 0.965 |
 
 MIRACL-id official rerank eval (BM25 top-100 → rerank): run
@@ -152,10 +153,26 @@ def main() -> None:
 
     from huggingface_hub import HfApi
 
+    from huggingface_hub.utils import HfHubHTTPError
+
     api = HfApi(token=token)
     branch = args.revision or "main"
     print(f"Creating/ensuring repo {args.repo_id} (branch: {branch}) ...")
     api.create_repo(repo_id=args.repo_id, repo_type="model", exist_ok=True, private=args.private)
+
+    if args.revision and args.revision != "main":
+        try:
+            api.create_branch(
+                repo_id=args.repo_id,
+                branch=args.revision,
+                repo_type="model",
+                revision="main",
+            )
+            print(f"Created branch {args.revision!r} from main")
+        except HfHubHTTPError as exc:
+            if "already exists" not in str(exc).lower():
+                raise
+            print(f"Branch {args.revision!r} already exists")
 
     upload_kwargs = (
         {"repo_id": args.repo_id, "revision": args.revision}
