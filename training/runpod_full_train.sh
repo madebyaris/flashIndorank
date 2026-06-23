@@ -36,10 +36,11 @@ if [[ ! -f training/train.py ]]; then
   shopt -s dotglob && cp -a /workspace/repo/* /workspace/ && shopt -u dotglob
 fi
 
-# Image ships CUDA torch — never install CPU torch from requirements-train.txt.
-python3 -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'available', torch.cuda.is_available())"
-
-pip install -q -r requirements-runpod-gpu.txt
+# Image ships CUDA torch — pin it so pip cannot replace with CPU build.
+TORCH_VER=$(python3 -c "import torch; print(torch.__version__)")
+echo "torch ${TORCH_VER} cuda=$(python3 -c 'import torch; print(torch.cuda.is_available())')"
+echo "torch==${TORCH_VER}" > /tmp/constraints.txt
+pip install -q -r requirements-runpod-gpu.txt -c /tmp/constraints.txt
 
 python3 -c "from transformers import PreTrainedModel; from sentence_transformers import CrossEncoder; print('imports OK')"
 
