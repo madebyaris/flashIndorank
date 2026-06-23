@@ -78,6 +78,48 @@ def ndcg_at_k(rank: int, k: int = 10) -> float:
     return 1.0 / math.log2(rank + 1)  # IDCG == 1 for a single relevant doc
 
 
+def ndcg_at_k_multi(relevances: List[int], k: int = 10) -> float:
+    """nDCG@k for a ranked list where ``relevances[i]`` is the gain at rank i."""
+    dcg = sum((2**rel - 1) / math.log2(i + 2) for i, rel in enumerate(relevances[:k]))
+    ideal = sorted(relevances, reverse=True)
+    idcg = sum((2**rel - 1) / math.log2(i + 2) for i, rel in enumerate(ideal[:k]))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+def miracl_metrics(
+    qrels: Dict[str, Dict[str, int]],
+    run: Dict[str, List[str]],
+    k: int = 10,
+    recall_k: int = 100,
+) -> Dict[str, float]:
+    """Compute mean nDCG@k, MRR@k, and Recall@recall_k over labeled queries."""
+    ndcgs: List[float] = []
+    mrrs: List[float] = []
+    recalls: List[float] = []
+    for qid, rel_docs in qrels.items():
+        ranked = run.get(qid, [])
+        rel_set = set(rel_docs)
+        if not rel_set:
+            continue
+        gains = [1 if docid in rel_set else 0 for docid in ranked[:k]]
+        ndcgs.append(ndcg_at_k_multi(gains, k=k))
+        rr = 0.0
+        for i, docid in enumerate(ranked[:k], start=1):
+            if docid in rel_set:
+                rr = 1.0 / i
+                break
+        mrrs.append(rr)
+        found = sum(1 for docid in ranked[:recall_k] if docid in rel_set)
+        recalls.append(found / len(rel_set))
+    n = len(ndcgs) or 1
+    return {
+        f"ndcg@{k}": sum(ndcgs) / n,
+        f"mrr@{k}": sum(mrrs) / n,
+        f"recall@{recall_k}": sum(recalls) / n,
+        "n": len(ndcgs),
+    }
+
+
 def aggregate(ranks: List[int], k: int = 10) -> Dict[str, float]:
     n = len(ranks) or 1
     return {

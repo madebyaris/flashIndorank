@@ -13,6 +13,7 @@ with "Write" access.
 
 Run:
     python training/upload_to_hf.py --repo-id madebyaris/rerank-indonesia
+    python training/upload_to_hf.py --revision huggingface --st-dir models/ft-id-ce-v2
 """
 
 from __future__ import annotations
@@ -41,30 +42,46 @@ tags:
 base_model: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
 datasets:
 - google-research-datasets/tydiqa
+- miracl/miracl
 metrics:
 - mrr
 - ndcg
 ---
 
-# rerank-indonesia
+# rerank-indonesia (v2 preview)
 
 A lightweight **Indonesian (Bahasa Indonesia) cross-encoder reranker**, fine-tuned
 from [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1)
-on Indonesian query/passage pairs (TyDi QA Gold Passage + mined hard negatives).
-It is small and CPU-friendly, so it runs fast even on a cheap VPS.
+on Indonesian query/passage pairs from **TyDi QA** and **MIRACL-id**, with
+**BM25 + dense hard-negative mining** (15 negatives per query).
+
+> **Branch note:** This `huggingface` branch holds the **v2 preview** checkpoint
+> (TyDi QA only, 50k pairs, 1 epoch on CPU). The `main` branch still serves the
+> original v1 model. Full training on TyDi + MIRACL (162k pairs) is intended to
+> run on RunPod GPU — see
+> [flashIndorank TRAINING.md](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
 
 Built as part of [flashIndorank](https://github.com/madebyaris/flashIndorank).
 
 ## Evaluation
 
-Held-out Indonesian eval (200 queries, 1 positive + 9 hard negatives each):
+TyDi holdout (200 queries, 1 positive + 9 hard negatives each):
 
 | model | top-1 | MRR | nDCG@10 |
 | --- | --- | --- | --- |
-| `ms-marco-MiniLM-L-12-v2` (English) | 0.615 | 0.743 | 0.805 |
-| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.860 | 0.921 | 0.941 |
-| **this model** | **0.895** | **0.940** | **0.956** |
-| **this model (int8 ONNX)** | **0.895** | **0.940** | **0.955** |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.905 | 0.943 | 0.957 |
+| **this model (v2 preview)** | **0.910** | **0.951** | **0.964** |
+| v1 on `main` branch | 0.915 | 0.953 | 0.965 |
+
+MIRACL-id official rerank eval (BM25 top-100 → rerank, 960 dev queries):
+
+| model | nDCG@10 | MRR@10 | Recall@100 |
+| --- | --- | --- | --- |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.656 | 0.623 | 0.760 |
+| **this model (v2 preview)** | 0.635 | 0.602 | 0.760 |
+
+> v2 preview was trained on TyDi only (50k pairs). Full TyDi+MIRACL training on
+> RunPod is expected to improve MIRACL numbers.
 
 ## Usage
 
@@ -73,7 +90,7 @@ Held-out Indonesian eval (200 queries, 1 positive + 9 hard negatives each):
 ```python
 from sentence_transformers import CrossEncoder
 
-model = CrossEncoder("madebyaris/rerank-indonesia")
+model = CrossEncoder("madebyaris/rerank-indonesia", revision="huggingface")
 query = "Bagaimana cara menurunkan berat badan?"
 passages = [
     "Olahraga teratur dan pola makan sehat membantu mengurangi bobot tubuh.",
@@ -85,15 +102,16 @@ print(scores)
 
 ### Lightweight ONNX (int8) via flashIndorank
 
-The quantized ONNX model lives under `onnx/`. Download it and serve with
-flashIndorank's `CustomReranker` (no torch/transformers needed at inference):
-
 ```python
 from huggingface_hub import snapshot_download
 from flashindorank import CustomReranker
 from flashrank import RerankRequest
 
-path = snapshot_download("madebyaris/rerank-indonesia", allow_patterns=["onnx/*"])
+path = snapshot_download(
+    "madebyaris/rerank-indonesia",
+    revision="huggingface",
+    allow_patterns=["onnx/*"],
+)
 ranker = CustomReranker(f"{path}/onnx")
 out = ranker.rerank(RerankRequest(
     query="Bagaimana cara menurunkan berat badan?",
@@ -105,14 +123,14 @@ print(out)
 ## Training
 
 - Base: `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
-- Data: Indonesian rows of TyDi QA (Gold Passage) + lexical hard negatives
-- Loss: binary cross-entropy (sentence-transformers `CrossEncoderTrainer`)
+- Data: TyDi QA Indonesian + MIRACL-id train (BM25 hard negatives)
+- Loss: binary cross-entropy (`CrossEncoderTrainer`)
 
-See the [training pipeline](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
+See [TRAINING.md](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
 
 ## License
 
-Apache-2.0, inherited from the base model. TyDi QA is Apache-2.0.
+Apache-2.0, inherited from the base model. TyDi QA and MIRACL are Apache-2.0.
 """
 
 
@@ -127,8 +145,9 @@ def _get_token() -> str | None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-id", default="madebyaris/rerank-indonesia")
-    parser.add_argument("--st-dir", default="models/ft-id-ce")
-    parser.add_argument("--onnx-dir", default="models/ft-id-ce-onnx")
+    parser.add_argument("--revision", default=None, help="HF branch/tag (e.g. huggingface)")
+    parser.add_argument("--st-dir", default="models/ft-id-ce-v2")
+    parser.add_argument("--onnx-dir", default="models/ft-id-ce-v2-onnx")
     parser.add_argument("--private", action="store_true")
     args = parser.parse_args()
 
@@ -141,43 +160,69 @@ def main() -> None:
 
     from huggingface_hub import HfApi
 
+    from huggingface_hub.utils import HfHubHTTPError
+
     api = HfApi(token=token)
-    print(f"Creating/ensuring repo {args.repo_id} ...")
+    branch = args.revision or "main"
+    print(f"Creating/ensuring repo {args.repo_id} (branch: {branch}) ...")
     api.create_repo(repo_id=args.repo_id, repo_type="model", exist_ok=True, private=args.private)
+
+    if args.revision and args.revision != "main":
+        try:
+            api.create_branch(
+                repo_id=args.repo_id,
+                branch=args.revision,
+                repo_type="model",
+                revision="main",
+            )
+            print(f"Created branch {args.revision!r} from main")
+        except HfHubHTTPError as exc:
+            if "already exists" not in str(exc).lower():
+                raise
+            print(f"Branch {args.revision!r} already exists")
+
+    upload_kwargs = (
+        {"repo_id": args.repo_id, "revision": args.revision}
+        if args.revision
+        else {"repo_id": args.repo_id}
+    )
 
     # 1) CrossEncoder (PyTorch) at repo root; skip checkpoints and the
     #    auto-generated README (we upload our own model card).
-    print("Uploading CrossEncoder weights + tokenizer ...")
+    print(f"Uploading CrossEncoder weights + tokenizer -> {branch} ...")
     api.upload_folder(
-        repo_id=args.repo_id,
+        **upload_kwargs,
         folder_path=args.st_dir,
         ignore_patterns=["_checkpoints/*", "README.md"],
-        commit_message="Add fine-tuned Indonesian CrossEncoder",
+        commit_message=f"Add Indonesian CrossEncoder v2 ({branch})",
     )
 
     # 2) Quantized ONNX under onnx/ (model.onnx is the int8 build).
-    print("Uploading quantized ONNX + tokenizer under onnx/ ...")
+    print(f"Uploading quantized ONNX + tokenizer under onnx/ -> {branch} ...")
     api.upload_folder(
-        repo_id=args.repo_id,
+        **upload_kwargs,
         folder_path=args.onnx_dir,
         path_in_repo="onnx",
         ignore_patterns=["model_quantized.onnx"],
-        commit_message="Add quantized ONNX model",
+        commit_message=f"Add quantized ONNX v2 ({branch})",
     )
 
     # 3) Model card.
-    print("Uploading model card ...")
+    print(f"Uploading model card -> {branch} ...")
     with tempfile.TemporaryDirectory() as tmp:
         card = Path(tmp) / "README.md"
         card.write_text(MODEL_CARD, encoding="utf-8")
         api.upload_file(
+            **upload_kwargs,
             path_or_fileobj=str(card),
             path_in_repo="README.md",
-            repo_id=args.repo_id,
-            commit_message="Add model card",
+            commit_message=f"Add model card v2 ({branch})",
         )
 
-    print(f"Done: https://huggingface.co/{args.repo_id}")
+    url = f"https://huggingface.co/{args.repo_id}"
+    if args.revision:
+        url += f"/tree/{args.revision}"
+    print(f"Done: {url}")
 
 
 if __name__ == "__main__":

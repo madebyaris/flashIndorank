@@ -25,7 +25,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-model", default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
     parser.add_argument("--train-file", default="data/train.jsonl")
-    parser.add_argument("--out-dir", default="models/ft-id-ce")
+    parser.add_argument("--out-dir", default="models/ft-id-ce-v2")
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=2e-5)
