@@ -4,13 +4,15 @@ set -euo pipefail
 exec > >(tee -a /workspace/runpod_train.log) 2>&1
 
 terminate_pod() {
-  if [[ -f /workspace/DONE ]] && [[ -n "${RUNPOD_API_KEY:-}" && -n "${RUNPOD_POD_ID:-}" ]]; then
-    echo "Training succeeded — terminating pod ${RUNPOD_POD_ID}..."
+  if [[ -n "${RUNPOD_API_KEY:-}" && -n "${RUNPOD_POD_ID:-}" ]]; then
+    if [[ -f /workspace/DONE ]]; then
+      echo "Training succeeded — terminating pod ${RUNPOD_POD_ID}..."
+    else
+      echo "Training failed — terminating pod ${RUNPOD_POD_ID} to stop billing..."
+    fi
     curl -sS -X DELETE \
       -H "Authorization: Bearer ${RUNPOD_API_KEY}" \
       "https://rest.runpod.io/v1/pods/${RUNPOD_POD_ID}" || true
-  elif [[ -n "${RUNPOD_API_KEY:-}" && -n "${RUNPOD_POD_ID:-}" ]]; then
-    echo "Training failed — pod ${RUNPOD_POD_ID} left running for inspection (or delete manually)."
   fi
 }
 trap terminate_pod EXIT
@@ -29,19 +31,17 @@ fi
 
 if [[ ! -f training/train.py ]]; then
   BRANCH="${FLASHINDORANK_BRANCH:-cursor/id-reranker-v2-6887}"
+  rm -rf /workspace/repo
   git clone --depth 1 -b "$BRANCH" https://github.com/madebyaris/flashIndorank.git /workspace/repo
   shopt -s dotglob && cp -a /workspace/repo/* /workspace/ && shopt -u dotglob
 fi
 
-pip install -q -r requirements-train.txt
+# Image ships CUDA torch — never install CPU torch from requirements-train.txt.
+python3 -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'available', torch.cuda.is_available())"
 
-# requirements-train.txt pins CPU torch; on GPU pods install CUDA build instead.
-if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
-  echo "CUDA torch already available: $(python3 -c 'import torch; print(torch.__version__, torch.version.cuda)')"
-else
-  echo "Installing CUDA torch for GPU training..."
-  pip install -q --upgrade torch --index-url https://download.pytorch.org/whl/cu121
-fi
+pip install -q -r requirements-runpod-gpu.txt
+
+python3 -c "from transformers import PreTrainedModel; from sentence_transformers import CrossEncoder; print('imports OK')"
 
 echo "--- Step 1: prepare_data (TyDi + MIRACL) ---"
 python training/prepare_data.py --sources tydi,miracl --train-negatives 15
@@ -65,4 +65,3 @@ python training/upload_to_hf.py --revision huggingface
 
 touch /workspace/DONE
 echo "=== ALL DONE $(date -Iseconds) ==="
-# trap EXIT calls terminate_pod
