@@ -28,25 +28,38 @@ class HardNegativeMiner:
         self.passage_ids = list(passage_ids) if passage_ids else [str(i) for i in range(len(passages))]
         self.id_to_idx = {pid: i for i, pid in enumerate(self.passage_ids)}
         self.idx_to_passage = {i: p for i, p in enumerate(self.passages)}
-        self.lexical = LexicalIndex(self.passages)
+        # Built lazily: a LexicalIndex over a large pool (e.g. the 1.44M MIRACL
+        # corpus) allocates one Counter per passage. When lexical mining is
+        # disabled (lexical_frac=0) it is never queried, so building it eagerly
+        # wastes ~10-15 GB of RAM and re-tokenizes the corpus a second time.
+        self._lexical: LexicalIndex | None = None
         self.bm25 = bm25
         self._dense = None
         self._dense_name = dense_model_name
         self._passage_emb = None
         random.seed(seed)
 
+    @property
+    def lexical(self) -> LexicalIndex:
+        if self._lexical is None:
+            self._lexical = LexicalIndex(self.passages)
+        return self._lexical
+
     def _dense_model(self):
         if self._dense is None and self._dense_name:
+            import torch
             from sentence_transformers import SentenceTransformer
 
-            print(f"Loading dense retriever {self._dense_name} ...", flush=True)
-            self._dense = SentenceTransformer(self._dense_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encode_batch = 256 if device == "cuda" else 64
+            print(f"Loading dense retriever {self._dense_name} on {device} ...", flush=True)
+            self._dense = SentenceTransformer(self._dense_name, device=device)
             print(f"Encoding {len(self.passages)} passages for dense mining ...", flush=True)
             self._passage_emb = self._dense.encode(
                 self.passages,
                 normalize_embeddings=True,
                 show_progress_bar=True,
-                batch_size=64,
+                batch_size=encode_batch,
             )
             print("Dense passage index ready.", flush=True)
         return self._dense

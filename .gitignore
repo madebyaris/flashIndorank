@@ -21,3 +21,6 @@ hf_cache/
 # Test / tooling caches
 .pytest_cache/
 .ruff_cache/
+
+# Local information / scratch (not tracked)
+information/

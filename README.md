@@ -50,26 +50,53 @@ export FLASHINDORANK_DEFAULT_MODEL=ms-marco-MultiBERT-L-12
 
 …or pass `"model": "ms-marco-MultiBERT-L-12"` per request.
 
-### Fine-tune your own Indonesian reranker (recommended)
+### Ready-to-use Indonesian reranker (recommended)
 
-For the strongest Indonesian results, fine-tune a lightweight multilingual
-cross-encoder on Indonesian data and serve the quantized ONNX result. See
-[`TRAINING.md`](TRAINING.md) for the full pipeline. On a reference CPU run the
-fine-tuned model beat every off-the-shelf option on a hard Indonesian eval:
+We publish a tiny, VPS-friendly Indonesian reranker:
+**[`madebyaris/rerank-indonesia`](https://huggingface.co/madebyaris/rerank-indonesia)**.
 
-| model | top-1 | MRR | nDCG@10 |
+It is built by **Margin-MSE knowledge distillation**: a 568M teacher
+(`BAAI/bge-reranker-v2-m3`) supervises the tiny `mmarco-mMiniLMv2-L12-H384`
+student on in-domain Indonesian data (TyDi QA + MIRACL-id). The student stays
+small (**118 MB int8 ONNX**) yet reaches ~98% of the teacher's ranking quality.
+
+**MIRACL-id** dev, official retrieve-then-rerank protocol (BM25 top-100 →
+rerank, 960 queries, `pytrec_eval`):
+
+| model | size | nDCG@10 | MRR@10 |
 | --- | --- | --- | --- |
-| `ms-marco-MiniLM-L-12-v2` (English default) | 0.615 | 0.743 | 0.805 |
-| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.860 | 0.921 | 0.941 |
-| **fine-tuned Indonesian model** | **0.895** | **0.940** | **0.956** |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | tiny | 0.656 | 0.623 |
+| **`madebyaris/rerank-indonesia`** (distilled) | tiny | **0.701** | **0.677** |
+| `BAAI/bge-reranker-v2-m3` (teacher) | 568M | 0.712 | 0.689 |
 
-Serve a fine-tuned/exported ONNX model alongside the bundled ones:
+The distilled model improves nDCG@10 by **+4.5 points** over the base while
+staying within ~1 point of the 17× larger teacher. (Recall@100 = 0.760 is the
+BM25 first-stage ceiling and bounds every reranker.)
+
+Use it with sentence-transformers:
+
+```python
+from sentence_transformers import CrossEncoder
+
+model = CrossEncoder("madebyaris/rerank-indonesia")
+scores = model.predict([[query, p] for p in passages])
+```
+
+…or serve the lightweight int8 ONNX inside flashIndorank:
 
 ```bash
-export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/ft-id-ce-onnx"
+huggingface-cli download madebyaris/rerank-indonesia --include "onnx/*" \
+  --local-dir models/rerank-indonesia
+export FLASHINDORANK_CUSTOM_MODELS="id-reranker=$PWD/models/rerank-indonesia/onnx"
 python -m flashindorank
 # POST /rerank with {"model": "id-reranker", ...}
 ```
+
+### Train or improve it yourself
+
+To reproduce or push further, see [`TRAINING.md`](TRAINING.md): build in-domain
+(query, positive, negative) triplets → score them with a strong teacher
+(Margin-MSE labels) → distill into the tiny student → export quantized ONNX.
 
 ## Models
 

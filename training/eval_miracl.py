@@ -79,13 +79,16 @@ def _build_or_load_bm25_hits(
 
 
 def _rerank_crossencoder(model_path: str, items: Sequence[dict], max_length: int) -> Dict[str, List[str]]:
+    import torch
     from sentence_transformers import CrossEncoder
 
-    model = CrossEncoder(model_path, max_length=max_length)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    batch_size = 128 if device == "cuda" else 32
+    model = CrossEncoder(model_path, max_length=max_length, device=device)
     ranked: Dict[str, List[str]] = {}
     for it in items:
         pairs = [[it["query"], c["text"]] for c in it["candidates"]]
-        scores = model.predict(pairs)
+        scores = model.predict(pairs, batch_size=batch_size, show_progress_bar=False)
         order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
         ranked[it["query_id"]] = [it["candidates"][i]["docid"] for i in order]
     return ranked

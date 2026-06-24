@@ -51,13 +51,15 @@ def _rank_of_positive_flashrank(model_name, items):
 
 
 def _rank_of_positive_crossencoder(model_path, items, max_length):
+    import torch
     from sentence_transformers import CrossEncoder
 
-    model = CrossEncoder(model_path, max_length=max_length)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = CrossEncoder(model_path, max_length=max_length, device=device)
     ranks = []
     for it in items:
         candidates = [it["positive"]] + list(it["negatives"])  # index 0 == positive
-        scores = model.predict([[it["query"], c] for c in candidates])
+        scores = model.predict([[it["query"], c] for c in candidates], show_progress_bar=False)
         order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
         ranks.append(order.index(0) + 1)
     return ranks

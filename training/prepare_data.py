@@ -161,7 +161,7 @@ def main() -> None:
         for neg in tydi_sample_negs(r["query"], gold_idx, args.train_negatives):
             train_pairs.append({"query": r["query"], "passage": neg, "label": 0.0})
         if (i + 1) % 500 == 0:
-            print(f"  TyDi {i + 1}/{len(train_tydi)}")
+            print(f"  TyDi {i + 1}/{len(train_tydi)}", flush=True)
 
     if miracl_rows and bm25 is not None:
         miracl_miner = HardNegativeMiner(
@@ -186,7 +186,7 @@ def main() -> None:
             for neg in negs:
                 train_pairs.append({"query": r["query"], "passage": neg, "label": 0.0})
             if (i + 1) % 500 == 0:
-                print(f"  MIRACL {i + 1}/{len(miracl_rows)}")
+                print(f"  MIRACL {i + 1}/{len(miracl_rows)}", flush=True)
 
     random.shuffle(train_pairs)
     n_train = write_jsonl(Path(args.out_dir) / "train.jsonl", train_pairs)

@@ -1,9 +1,14 @@
-# GPU pod deps — torch is pre-installed in runpod/pytorch (CUDA 11.8). Do not upgrade it.
-sentence-transformers==3.0.1
-transformers==4.40.2
+# GPU pod deps — torch is pinned via constraints (torch==2.4.1+cu124); do not upgrade it.
+# train.py uses the sentence-transformers v5 CrossEncoderTrainer API, which does
+# NOT exist in 3.x — the base image ships 3.0.1, so we MUST install >=5.0 here.
+# PyPI: sentence-transformers 5.6 requires transformers>=4.41,<6 and torch>=1.11.
+sentence-transformers>=5.0,<6.0
+transformers>=4.41,<5.0
+# datasets pinned <3.0: prepare_data loads the script-based `tydiqa` dataset,
+# which datasets 3.x removed. (Only needed when regenerating data.)
 datasets>=2.18,<3.0
-accelerate>=0.30,<1.0
-optimum[onnxruntime]>=1.20,<2.0
+accelerate>=0.30,<2.0
+optimum[onnxruntime]>=1.20,<3.0
 rank-bm25>=0.2
 huggingface_hub>=0.23
 scikit-learn

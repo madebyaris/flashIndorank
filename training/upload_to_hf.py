@@ -37,6 +37,7 @@ tags:
 - text-ranking
 - indonesian
 - bahasa-indonesia
+- knowledge-distillation
 - flashrank
 - onnx
 base_model: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
@@ -48,40 +49,36 @@ metrics:
 - ndcg
 ---
 
-# rerank-indonesia (v2 preview)
+# rerank-indonesia
 
-A lightweight **Indonesian (Bahasa Indonesia) cross-encoder reranker**, fine-tuned
-from [`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1)
-on Indonesian query/passage pairs from **TyDi QA** and **MIRACL-id**, with
-**BM25 + dense hard-negative mining** (15 negatives per query).
+A lightweight **Indonesian (Bahasa Indonesia) cross-encoder reranker**, small
+enough to serve on a cheap CPU VPS yet competitive with a 17× larger model.
 
-> **Branch note:** This `huggingface` branch holds the **v2 preview** checkpoint
-> (TyDi QA only, 50k pairs, 1 epoch on CPU). The `main` branch still serves the
-> original v1 model. Full training on TyDi + MIRACL (162k pairs) is intended to
-> run on RunPod GPU — see
-> [flashIndorank TRAINING.md](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
+It is built by **Margin-MSE knowledge distillation**: a strong multilingual
+teacher, [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3)
+(568M params), supervises the tiny student
+[`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`](https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1)
+on in-domain Indonesian (query, positive, negative) triplets from **TyDi QA** and
+**MIRACL-id** (with BM25 + dense hard-negative mining). The student learns the
+teacher's score *margin* between relevant and non-relevant passages.
 
 Built as part of [flashIndorank](https://github.com/madebyaris/flashIndorank).
 
 ## Evaluation
 
-TyDi holdout (200 queries, 1 positive + 9 hard negatives each):
+**MIRACL-id** official retrieve-then-rerank protocol (BM25 top-100 → rerank,
+960 dev queries, `pytrec_eval`):
 
-| model | top-1 | MRR | nDCG@10 |
-| --- | --- | --- | --- |
-| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.905 | 0.943 | 0.957 |
-| **this model (v2 preview)** | **0.910** | **0.951** | **0.964** |
-| v1 on `main` branch | 0.915 | 0.953 | 0.965 |
+| model | params | nDCG@10 | MRR@10 | Recall@100 |
+| --- | --- | --- | --- | --- |
+| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | tiny | 0.656 | 0.623 | 0.760 |
+| **this model** (in-domain distillation) | **tiny** | **0.701** | **0.677** | 0.760 |
+| `BAAI/bge-reranker-v2-m3` (teacher) | 568M | 0.712 | 0.689 | 0.760 |
 
-MIRACL-id official rerank eval (BM25 top-100 → rerank, 960 dev queries):
-
-| model | nDCG@10 | MRR@10 | Recall@100 |
-| --- | --- | --- | --- |
-| `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (base) | 0.656 | 0.623 | 0.760 |
-| **this model (v2 preview)** | 0.635 | 0.602 | 0.760 |
-
-> v2 preview was trained on TyDi only (50k pairs). Full TyDi+MIRACL training on
-> RunPod is expected to improve MIRACL numbers.
+The distilled student improves nDCG@10 by **+4.5 points** over the base while
+staying within **~1 point of the 568M teacher** — roughly 98% of the teacher's
+ranking quality at a fraction of the size and latency. (Recall@100 is the BM25
+first-stage ceiling and bounds all rerankers.)
 
 ## Usage
 
@@ -90,7 +87,7 @@ MIRACL-id official rerank eval (BM25 top-100 → rerank, 960 dev queries):
 ```python
 from sentence_transformers import CrossEncoder
 
-model = CrossEncoder("madebyaris/rerank-indonesia", revision="huggingface")
+model = CrossEncoder("madebyaris/rerank-indonesia")
 query = "Bagaimana cara menurunkan berat badan?"
 passages = [
     "Olahraga teratur dan pola makan sehat membantu mengurangi bobot tubuh.",
@@ -107,11 +104,7 @@ from huggingface_hub import snapshot_download
 from flashindorank import CustomReranker
 from flashrank import RerankRequest
 
-path = snapshot_download(
-    "madebyaris/rerank-indonesia",
-    revision="huggingface",
-    allow_patterns=["onnx/*"],
-)
+path = snapshot_download("madebyaris/rerank-indonesia", allow_patterns=["onnx/*"])
 ranker = CustomReranker(f"{path}/onnx")
 out = ranker.rerank(RerankRequest(
     query="Bagaimana cara menurunkan berat badan?",
@@ -122,9 +115,13 @@ print(out)
 
 ## Training
 
-- Base: `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
-- Data: TyDi QA Indonesian + MIRACL-id train (BM25 hard negatives)
-- Loss: binary cross-entropy (`CrossEncoderTrainer`)
+- Student / base: `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
+- Teacher: `BAAI/bge-reranker-v2-m3`
+- Method: Margin-MSE knowledge distillation (Hofstätter et al., 2020) —
+  `label = teacher(q, pos) - teacher(q, neg)`
+- Data: in-domain Indonesian triplets from TyDi QA + MIRACL-id train,
+  BM25 + dense hard negatives
+- Optimizer: 3 epochs, lr 8e-6, bf16, `MarginMSELoss` (`CrossEncoderTrainer`)
 
 See [TRAINING.md](https://github.com/madebyaris/flashIndorank/blob/main/TRAINING.md).
 

@@ -128,9 +128,13 @@ class MiraclBM25:
         self.texts = list(texts)
         self.docid_to_idx = {d: i for i, d in enumerate(self.docids)}
         print(f"Tokenizing {len(self.texts)} passages for BM25 ...", flush=True)
-        self._tokenized = [tokenize(t) for t in self.texts]
+        tokenized = [tokenize(t) for t in self.texts]
         print("Building BM25 index ...", flush=True)
-        self._bm25 = BM25Okapi(self._tokenized)
+        self._bm25 = BM25Okapi(tokenized)
+        # BM25Okapi keeps its own doc_freqs/idf; the raw token lists (~1.44M for
+        # the MIRACL corpus) are not needed after indexing — drop them to free
+        # several GB of RAM for the rest of the pipeline.
+        del tokenized
         print("BM25 index ready.", flush=True)
 
     def search(self, query: str, k: int, exclude: set[str] | None = None) -> List[Tuple[str, str, float]]:

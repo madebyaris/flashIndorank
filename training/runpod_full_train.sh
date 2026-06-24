@@ -47,8 +47,8 @@ python3 -c "from transformers import PreTrainedModel; from sentence_transformers
 echo "--- Step 1: prepare_data (TyDi + MIRACL) ---"
 python training/prepare_data.py --sources tydi,miracl --train-negatives 15
 
-echo "--- Step 2: train (full data, 1 epoch) ---"
-python training/train.py --epochs 1 --batch-size 32 --out-dir models/ft-id-ce-v2
+echo "--- Step 2: train (full data, 1 epoch, GPU bf16 batch 64) ---"
+python training/train.py --epochs 1 --batch-size 64 --out-dir models/ft-id-ce-v2
 
 echo "--- Step 3: TyDi eval ---"
 python training/evaluate.py --models \

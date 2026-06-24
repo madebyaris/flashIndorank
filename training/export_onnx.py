@@ -25,6 +25,14 @@ def main() -> None:
     parser.add_argument("--no-quantize", action="store_true", help="skip int8 quantization")
     args = parser.parse_args()
 
+    # Compat shim: some onnxruntime builds reference ``torch.int4`` when mapping ORT
+    # tensor types, which older torch lacks. Our model has no int4 tensors, so this
+    # entry is never used — we just need the lookup table to evaluate.
+    import torch
+
+    if not hasattr(torch, "int4"):
+        torch.int4 = torch.uint8
+
     from optimum.onnxruntime import ORTModelForSequenceClassification
     from transformers import AutoTokenizer
 
